@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인터랙티브 원자 및 이온 모형 만들기</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            display: flex;
+            /* 모바일, 태블릿 브라우저 주소창을 고려한 실제 동적 높이(dvh) 적용 */
+            height: 100vh; 
+            height: 100dvh; 
+            overflow-y: auto; /* 화면이 너무 작을 경우를 대비한 최소한의 스크롤 허용 */
+            overflow-x: hidden;
+        }
+        
+        /* 좌측 메뉴 패널 */
+        .sidebar {
+            width: 250px;
+            background: white;
+            padding: 15px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        
+        .sidebar h1 {
+            font-size: 20px;
+            color: #333;
+            margin: 0 0 5px 0;
+            line-height: 1.3;
+        }
+
+        label {
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+
+        select, button {
+            padding: 10px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: none;
+        }
+
+        button:hover { background-color: #0056b3; }
+        
+        /* 진행 상황 안내 박스 */
+        .result-box {
+            margin-top: auto; 
+            margin-bottom: 5px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 6px solid #d9534f;
+            font-size: 14px;
+            font-weight: bold;
+            color: #d9534f;
+            text-align: center;
+            line-height: 1.4;
+            word-break: keep-all;
+        }
+
+        /* 우측 캔버스 및 콘텐츠 영역 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #eef2f5;
+            padding: 10px 15px; 
+            box-sizing: border-box;
+            min-height: 0;
+        }
+
+        /* 모형 영역 */
+        .simulation-area {
+            flex: 1; 
+            min-height: 0; 
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            gap: 15px; 
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            padding: 10px; 
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+            box-sizing: border-box;
+            min-height: 0; /* 내부 콘텐츠가 삐져나오지 않게 함 */
+        }
+
+        .canvas-wrapper h3 {
+            margin: 0 0 5px 0;
+            color: #444;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        /* 표를 밖으로 밀어내지 않도록 캔버스 영역을 강력하게 제한 (핵심 수정 부분) */
+        .canvas-container {
+            flex: 1;
+            width: 100%;
+            min-height: 0; /* 컨테이너 크기 최소화 허용 */
+            position: relative; /* 캔버스를 가두기 위한 설정 */
+        }
+
+        canvas {
+            background-color: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            
+            /* 컨테이너 중앙에 캔버스를 띄우고 절대 크기를 초과하지 못하게 함 */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 1 / 1; 
+        }
+
+        #ionCanvas {
+            cursor: default;
+        }
+
+        .arrow {
+            display: flex;
+            align-items: center;
+            font-size: 40px;
+            color: #bbb;
+            font-weight: bold;
+        }
+
+        .symbol-label {
+            margin-top: 5px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            min-height: 28px;
+            flex-shrink: 0;
+        }
+
+        /* 전하량 표 영역 */
+        .table-container {
+            width: 100%;
+            max-width: 700px;
+            background: white;
+            padding: 8px 10px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+            margin-top: 10px; 
+            flex-shrink: 0; /* 표 크기는 줄어들지 않고 무조건 유지되도록 보장 */
+            box-sizing: border-box;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+        }
+
+        th, td {
+            padding: 5px 4px; 
+            border: 2px solid #eee;
+        }
+
+        th {
+            background-color: #f1f3f5;
+            color: #222;
+            font-weight: 800;
+            font-size: 13px; 
+        }
+
+        td {
+            color: #222;
+            font-weight: 700;
+            font-size: 18px; 
+        }
+
+        .highlight-total {
+            color: #d9534f;
+            font-size: 22px; 
+            font-weight: 900;
+        }
+
+        /* 태블릿(세로 모드) & 모바일 기기를 위한 반응형 디자인 추가 */
+        @media (max-width: 850px) {
+            body {
+                flex-direction: column; /* 메뉴를 위로, 콘텐츠를 아래로 배치 */
+            }
+            .sidebar {
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                padding: 10px 15px;
+                gap: 10px;
+            }
+            .sidebar h1 {
+                width: 100%;
+                text-align: center;
+                font-size: 18px;
+            }
+            .sidebar > div {
+                flex: 1;
+                min-width: 150px;
+            }
+            #resetBtn {
+                flex: 1;
+                min-width: 120px;
+                margin-top: auto;
+            }
+            .result-box {
+                width: 100%;
+                margin: 5px 0 0 0;
+            }
+            .main-content {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h1>클릭해서 만드는 원자 & 이온 모형</h1>
+        <div>
+            <label for="elementSelect">원소 선택</label>
+            <select id="elementSelect" style="margin-top: 5px;"></select>
+        </div>
+        <button id="resetBtn">처음부터 다시하기</button>
+        <div class="result-box" id="resultText">가운데 <strong>[?]</strong> 원자핵을 클릭하여 전하량을 확인하세요.</div>
+    </div>
+
+    <div class="main-content">
+        <!-- 모형 캔버스 영역 -->
+        <div class="simulation-area">
+            <div class="canvas-wrapper">
+                <h3>중성 원자 만들기</h3>
+                <div class="canvas-container">
+                    <canvas id="atomCanvas" width="600" height="600"></canvas>
+                </div>
+                <div class="symbol-label" id="atomSymbolLabel"></div>
+            </div>
+
+            <div class="arrow">➔</div>
+
+            <div class="canvas-wrapper">
+                <h3>이온 형성 과정</h3>
+                <div class="canvas-container">
+                    <canvas id="ionCanvas" width="600" height="600"></canvas>
+                </div>
+                <div class="symbol-label" id="ionSymbolLabel"></div>
+            </div>
+        </div>
+
+        <!-- 하단 표 영역 -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>기호 / 이온식</th>
+                        <th>원자핵 전하량</th>
+                        <th>전자 총 전하량</th>
+                        <th>전체 전하량</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="font-size: 15px;"><strong>원자</strong></td>
+                        <td id="tblAtomSymbol">-</td>
+                        <td id="tblAtomNuc">-</td>
+                        <td id="tblAtomElec">-</td>
+                        <td id="tblAtomTotal" class="highlight-total">-</td>
+                    </tr>
+                    <tr>
+                        <td style="font-size: 15px;"><strong>이온</strong></td>
+                        <td id="tblIonSymbol">-</td>
+                        <td id="tblIonNuc">-</td>
+                        <td id="tblIonElec">-</td>
+                        <td id="tblIonTotal" class="highlight-total">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<script>
+    const elements = [
+        { z: 1, symbol: 'H', name: '수소', ion: 'H⁺', action: 'lose', count: 1 },
+        { z: 2, symbol: 'He', name: '헬륨', ion: 'He (변화없음)', action: 'none', count: 0 },
+        { z: 3, symbol: 'Li', name: '리튬', ion: 'Li⁺', action: 'lose', count: 1 },
+        { z: 4, symbol: 'Be', name: '베릴륨', ion: 'Be²⁺', action: 'lose', count: 2 },
+        { z: 5, symbol: 'B', name: '붕소', ion: 'B³⁺', action: 'lose', count: 3 },
+        { z: 6, symbol: 'C', name: '탄소', ion: 'C (이온 형성 안함)', action: 'none', count: 0 },
+        { z: 7, symbol: 'N', name: '질소', ion: 'N³⁻', action: 'gain', count: 3 },
+        { z: 8, symbol: 'O', name: '산소', ion: 'O²⁻', action: 'gain', count: 2 },
+        { z: 9, symbol: 'F', name: '플루오린', ion: 'F⁻', action: 'gain', count: 1 },
+        { z: 10, symbol: 'Ne', name: '네온', ion: 'Ne (변화없음)', action: 'none', count: 0 },
+        { z: 11, symbol: 'Na', name: '나트륨', ion: 'Na⁺', action: 'lose', count: 1 },
+        { z: 12, symbol: 'Mg', name: '마그네슘', ion: 'Mg²⁺', action: 'lose', count: 2 },
+        { z: 13, symbol: 'Al', name: '알루미늄', ion: 'Al³⁺', action: 'lose', count: 3 },
+        { z: 14, symbol: 'Si', name: '규소', ion: 'Si (이온 형성 안함)', action: 'none', count: 0 },
+        { z: 15, symbol: 'P', name: '인', ion: 'P³⁻', action: 'gain', count: 3 },
+        { z: 16, symbol: 'S', name: '황', ion: 'S²⁻', action: 'gain', count: 2 },
+        { z: 17, symbol: 'Cl', name: '염소', ion: 'Cl⁻', action: 'gain', count: 1 },
+        { z: 18, symbol: 'Ar', name: '아르곤', ion: 'Ar (변화없음)', action: 'none', count: 0 },
+        { z: 19, symbol: 'K', name: '칼륨', ion: 'K⁺', action: 'lose', count: 1 },
+        { z: 20, symbol: 'Ca', name: '칼슘', ion: 'Ca²⁺', action: 'lose', count: 2 }
+    ];
+
+    const atomCanvas = document.getElementById('atomCanvas');
+    const atomCtx = atomCanvas.getContext('2d');
+    const ionCanvas = document.getElementById('ionCanvas');
+    const ionCtx = ionCanvas.getContext('2d');
+    const select = document.getElementById('elementSelect');
+    const resetBtn = document.getElementById('resetBtn');
+    const resultText = document.getElementById('resultText');
+
+    const canvasWidth = 600;
+    const canvasHeight = 600;
+    const centerX = canvasWidth / 2; 
+    const centerY = canvasHeight / 2; 
+    
+    const shellRadii = [80, 150, 215, 270]; 
+    const electronRadius = 18; 
+    const nucleusRadius = 40; 
+
+    let currentElement = null;
+    let atomElectrons = [];
+    let ionElectrons = [];
+    let shellDistribution = [];
+    
+    let isNucleusRevealed = false;
+    let filledShellsCount = 0;
+    let isAtomComplete = false;
+    let isIonAnimating = false;
+    let isIonComplete = false;
+    let animationId = null;
+
+    elements.forEach(el => {
+        let option = document.createElement('option');
+        option.value = el.z;
+        option.textContent = `${el.z}번 ${el.name} (${el.symbol})`;
+        select.appendChild(option);
+    });
+
+    function getShellDistribution(z) {
+        let dist = [];
+        let remaining = z;
+        for (let cap of [2, 8, 8, 2]) {
+            let fill = Math.min(remaining, cap);
+            dist.push(fill);
+            remaining -= fill;
+            if (remaining <= 0) break;
+        }
+        return dist;
+    }
+
+    function addElectronsToShell(shellIdx, count) {
+        let radius = shellRadii[shellIdx];
+        for (let i = 0; i < count; i++) {
+            let angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+            atomElectrons.push({
+                shellIdx, angle, radius, targetRadius: radius, alpha: 1, isExtra: false,
+                x: centerX + radius * Math.cos(angle),
+                y: centerY + radius * Math.sin(angle)
+            });
+        }
+    }
+
+    function drawModel(ctx, element, electronsList, showNucleus, totalShells) {
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, nucleusRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 26px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(showNucleus ? `+${element.z}` : `?`, centerX, centerY);
+
+        for (let i = 0; i < totalShells; i++) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, shellRadii[i], 0, Math.PI * 2);
+            ctx.strokeStyle = '#777777'; 
+            ctx.lineWidth = 3;         
+            ctx.stroke();
+        }
+
+        electronsList.forEach(e => {
+            if (e.alpha <= 0) return;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, electronRadius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(33, 150, 243, ${e.alpha})`;
+            ctx.fill();
+            
+            ctx.fillStyle = `rgba(255, 255, 255, ${e.alpha})`;
+            ctx.font = 'bold 22px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('-', e.x, e.y);
+        });
+    }
+
+    function updateTable() {
+        if (isAtomComplete) {
+            document.getElementById('tblAtomSymbol').textContent = currentElement.symbol;
+            document.getElementById('tblAtomNuc').textContent = `+${currentElement.z}`;
+            document.getElementById('tblAtomElec').textContent = `-${currentElement.z}`;
+            document.getElementById('tblAtomTotal').textContent = `0`;
+        } else {
+            document.getElementById('tblAtomSymbol').textContent = "-";
+            document.getElementById('tblAtomNuc').textContent = "-";
+            document.getElementById('tblAtomElec').textContent = "-";
+            document.getElementById('tblAtomTotal').textContent = "-";
+        }
+
+        if (isIonComplete) {
+            let finalElec = currentElement.action === 'lose' ? (currentElement.z - currentElement.count) : (currentElement.z + currentElement.count);
+            let total = currentElement.action === 'lose' ? `+${currentElement.count}` : `-${currentElement.count}`;
+            if (currentElement.action === 'none') { finalElec = currentElement.z; total = '0'; }
+            
+            document.getElementById('tblIonSymbol').textContent = currentElement.ion;
+            document.getElementById('tblIonNuc').textContent = `+${currentElement.z}`;
+            document.getElementById('tblIonElec').textContent = `-${finalElec}`;
+            document.getElementById('tblIonTotal').textContent = total;
+            document.getElementById('ionSymbolLabel').textContent = currentElement.ion;
+        } else {
+            document.getElementById('tblIonSymbol').textContent = "-";
+            document.getElementById('tblIonNuc').textContent = "-";
+            document.getElementById('tblIonElec').textContent = "-";
+            document.getElementById('tblIonTotal').textContent = "-";
+            document.getElementById('ionSymbolLabel').textContent = "?";
+        }
+    }
+
+    atomCanvas.addEventListener('click', function(e) {
+        const rect = atomCanvas.getBoundingClientRect();
+        
+        const scaleX = atomCanvas.width / rect.width;
+        const scaleY = atomCanvas.height / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+
+        if (dist <= nucleusRadius) {
+            if (!isNucleusRevealed) {
+                isNucleusRevealed = true;
+                resultText.innerHTML = `원자핵 전하량(<strong>+${currentElement.z}</strong>)을 확인했습니다.<br>이제 <strong>첫 번째 전자 껍질</strong>을 클릭하세요.`;
+                drawModel(atomCtx, currentElement, atomElectrons, true, shellDistribution.length);
+                drawModel(ionCtx, currentElement, [], true, shellDistribution.length);
+            }
+            return;
+        }
+
+        if (!isNucleusRevealed) {
+            resultText.innerHTML = "먼저 <strong>가운데 원자핵[?]</strong>을 클릭하여 전하량을 확인하세요!";
+            return;
+        }
+
+        if (isAtomComplete) {
+            if (isIonAnimating || isIonComplete) return;
+
+            let valenceShellIdx = shellDistribution.length - 1;
+            if (Math.abs(dist - shellRadii[valenceShellIdx]) < 25) {
+                if (currentElement.action === 'none') {
+                    resultText.innerHTML = `${currentElement.name}은(는) 비활성 기체이거나 14족 원소로 <strong>이온을 잘 형성하지 않습니다.</strong>`;
+                    return;
+                }
+                startIonization();
+            } else {
+                resultText.innerHTML = "이온을 만들려면 <strong>가장 바깥쪽 전자 껍질</strong>을 클릭하세요!";
+            }
+            return;
+        }
+
+        for (let i = 0; i < shellDistribution.length; i++) {
+            if (Math.abs(dist - shellRadii[i]) < 25) {
+                if (i === filledShellsCount) {
+                    addElectronsToShell(i, shellDistribution[i]);
+                    filledShellsCount++;
+                    
+                    drawModel(atomCtx, currentElement, atomElectrons, true, shellDistribution.length);
+
+                    if (filledShellsCount === shellDistribution.length) {
+                        isAtomComplete = true;
+                        updateTable();
+                        if (currentElement.action === 'none') {
+                            resultText.innerHTML = `<strong>중성 원자</strong>가 완성되었습니다.<br>(이 원소는 이온을 형성하지 않습니다)`;
+                        } else {
+                            resultText.innerHTML = `<strong>중성 원자</strong>가 완성되었습니다!<br>전자를 잃거나 얻으려면 <strong>가장 바깥 전자 껍질</strong>을 클릭하세요.`;
+                        }
+                    } else {
+                        resultText.innerHTML = `${i+1}번째 껍질에 전자가 채워졌습니다.<br><strong>다음 전자 껍질</strong>을 클릭하세요.`;
+                    }
+                } else if (i > filledShellsCount) {
+                    resultText.innerHTML = "안쪽 전자 껍질부터 <strong>차례대로</strong> 채워야 합니다!";
+                } else {
+                    resultText.innerHTML = "이미 채워진 껍질입니다. <strong>다음 껍질</strong>을 클릭하세요.";
+                }
+                return;
+            }
+        }
+    });
+
+    function startIonization() {
+        isIonAnimating = true;
+        resultText.innerHTML = "이온 형성 중...";
+        
+        ionElectrons = atomElectrons.map(e => ({...e}));
+        
+        let action = currentElement.action;
+        let count = currentElement.count;
+        let valenceIdx = shellDistribution.length - 1;
+
+        if (action === 'lose') {
+            ionElectrons.filter(e => e.shellIdx === valenceIdx).forEach(e => e.targetRadius = 800);
+        } else {
+            let currentInValence = shellDistribution[valenceIdx];
+            let targetTotal = currentInValence + count;
+            for (let i = 0; i < count; i++) {
+                let angle = (Math.PI * 2 / targetTotal) * (currentInValence + i) - Math.PI / 2;
+                ionElectrons.push({
+                    shellIdx: valenceIdx, angle, radius: 800, targetRadius: shellRadii[valenceIdx],
+                    alpha: 0, isExtra: true, x: 0, y: 0
+                });
+            }
+            ionElectrons.filter(e => e.shellIdx === valenceIdx && !e.isExtra).forEach((e, i) => {
+                e.targetAngle = (Math.PI * 2 / targetTotal) * i - Math.PI / 2;
+            });
+        }
+
+        function step() {
+            let moving = false;
+            ionElectrons.forEach(e => {
+                if (Math.abs(e.radius - e.targetRadius) > 1) {
+                    e.radius += (e.targetRadius - e.radius) * 0.05;
+                    moving = true;
+                }
+                if (e.targetAngle !== undefined && Math.abs(e.angle - e.targetAngle) > 0.01) {
+                    e.angle += (e.targetAngle - e.angle) * 0.05;
+                    moving = true;
+                }
+                e.x = centerX + e.radius * Math.cos(e.angle);
+                e.y = centerY + e.radius * Math.sin(e.angle);
+                
+                if (action === 'lose' && e.radius > shellRadii[valenceIdx]) e.alpha -= 0.02;
+                if (action === 'gain' && e.isExtra) e.alpha += 0.02;
+            });
+
+            drawModel(ionCtx, currentElement, ionElectrons, true, shellDistribution.length);
+            
+            if (moving) {
+                animationId = requestAnimationFrame(step);
+            } else { 
+                isIonAnimating = false;
+                isIonComplete = true;
+                updateTable(); 
+                resultText.innerHTML = `<strong>${currentElement.ion}</strong> 이온 형성 완료!`; 
+            }
+        }
+        step();
+    }
+
+    function initAtom(z) {
+        cancelAnimationFrame(animationId);
+        currentElement = elements.find(e => e.z == parseInt(z));
+        shellDistribution = getShellDistribution(currentElement.z);
+        
+        atomElectrons = [];
+        ionElectrons = [];
+        isNucleusRevealed = false;
+        filledShellsCount = 0;
+        isAtomComplete = false;
+        isIonAnimating = false;
+        isIonComplete = false;
+        
+        resultText.innerHTML = `가운데 <strong>[?]</strong> 원자핵을 클릭하여 전하량을 확인하세요.`;
+        document.getElementById('atomSymbolLabel').textContent = currentElement.symbol;
+        document.getElementById('ionSymbolLabel').textContent = "?";
+        
+        updateTable();
+        
+        drawModel(atomCtx, currentElement, [], false, shellDistribution.length);
+        drawModel(ionCtx, currentElement, [], false, shellDistribution.length);
+    }
+
+    select.addEventListener('change', (e) => initAtom(e.target.value));
+    resetBtn.addEventListener('click', () => initAtom(select.value));
+
+    initAtom(1);
+</script>
+</body>
+</html>
